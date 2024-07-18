@@ -1,23 +1,90 @@
-# Create a basic HTTP server
-    # How to start HTTP server using python
-
 import http.server as HS
 import socketserver
+import json
+from http import HTTPStatus
 
-# Custom handler to process requests the way you want
+# Custom handler to process requests
 class myHandler(HS.SimpleHTTPRequestHandler):
-   def do_GET(self):
-      # Response code telling browser what the status is
-      self.send_response(200)
+    tasks = []
 
-      # Set the response headers so client knows what info is coming in
-      self.send_header('Content-type', 'text/html')
-      self.end_headers()
+    def do_POST(self):
+        if self.path == "/tasks":
+            # Get how many bytes to read
+            content_length = int(self.headers["content-length"])
 
-      # Write response body "Hello world" to the output stream (wfile)
-      # String is encoded to bytes needed by HTTP 
-      # Content is then displayed in client's browser
-      self.wfile.write("Hellow, world".encode())
+            # Use rfile's read method to read in the undecoded data
+            data = self.rfile.read(content_length)
+
+            # Decode the data to strings and make it into JSON format
+            decoded_data = json.loads(data.decode('utf-8'))
+
+            # Validate title, making sure that the field is there
+            if 'title' not in decoded_data:
+                self.send_error(HTTPStatus.BAD_REQUEST, "Missing 'title' field")
+                return 
+
+            # Create a new task
+            new_task = {
+                'id': len(self.tasks) + 1,
+                'title': decoded_data['title'],
+                'description': decoded_data.get ('description', ''),
+                'status': 'Not Started'
+            }
+
+            # add new task into storage area
+            self.tasks.append(new_task)
+
+            # Prepare the response
+            response = json.dumps(new_task)
+
+            # Send response
+            self.send_response(HTTPStatus.CREATED)
+            self.send_header('content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(response.encode())
+        else:
+            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+
+    def do_GET(self):
+        # If request is just tasks then get all the tasks, if followed by # then
+        # get specific
+        if self.path == "/tasks":
+            self.get_all_tasks()
+        elif self.path.startswith('/tasks/'):
+            self.get_specific_task()
+        else:
+            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+
+        
+    def get_all_tasks(self):
+        response = json.dumps(self.tasks)
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(response.encode())
+
+    def get_specific_task(self):
+        # self.path is just /tasks/#, so we want to split to using / to 
+        # get our task #
+        task_id = int(self.path.split('/')[-1])
+
+    
+        found_task = None
+        for task in self.tasks:
+            if task['id'] == task_id:
+                found_task = task
+        
+        if found_task:
+            response = json.dumps(found_task)
+
+            self.send_response(HTTPStatus.OK)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(response.encode())
+        else:
+            self.send_error(HTTPStatus.NOT_FOUND, "Task not found")
+
 
 
 PORT = 8000
