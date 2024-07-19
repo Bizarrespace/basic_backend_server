@@ -85,7 +85,58 @@ class myHandler(HS.SimpleHTTPRequestHandler):
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "Task not found")
 
+    def do_PUT(self):
+        if (self.path.startswith('/tasks/')):
+            
+            # Get the id that the user wants to change
+            try: 
+                task_id = int(self.path.split('/')[-1])
+            except ValueError:
+                self.send_error(HTTPStatus.BAD_REQUEST, "Invalid task ID")
+                return
+            
+            # Check if task_id is valid
+            if task_id <= 0 or task_id > len(self.tasks):
+                self.send_error(HTTPStatus.NOT_FOUND, "Invalid task ID")
+                return
 
+            # Decode the data
+            content_length = int(self.headers["content-length"])
+            data = self.rfile.read(content_length)
+            decoded_data = json.loads(data.decode('utf-8'))
+
+            # B/c of 0 based indexing, when the user says 2, the data that they actually want to change is in index 1
+            task_index = task_id - 1
+
+            new_task = {
+                    'id': task_id,
+                    'title': decoded_data['title'],
+                    'description': decoded_data.get ('description', ''),
+                    'status': decoded_data['status']
+                }
+
+            # Replace the task at the index with the new one from the user
+            self.tasks[task_index] = new_task
+
+            response = json.dumps(self.tasks[task_index])
+            self.send_response(HTTPStatus.OK)
+            self.send_header('content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(response.encode())
+        else:
+            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+            return 
+        
+    def do_DELETE(self):
+        if (self.path.startswith('/tasks/')):
+            
+            # Get the id that the user wants to change
+            try: 
+                task_id = int(self.path.split('/')[-1])
+            except ValueError:
+                self.send_error(HTTPStatus.BAD_REQUEST, "Invalid task ID")
+                return
+            
 
 PORT = 8000
 handler = myHandler
@@ -93,3 +144,16 @@ handler = myHandler
 with socketserver.TCPServer(("127.0.0.1", PORT), handler) as httpd:
    print("Server at port ", PORT)
    httpd.serve_forever() 
+
+
+# We are making a backend-api that simply has as tasks array, that shows the task name, description, and if its completed or not
+# The get gets all of the tasks so just the task array, if there is an id then get the task with that specific id
+# POST sends a task to the "server" in a JSON? format, the server than reads all of it, and then makes a new task object, that then 
+# gets inserted into the tasks array, and then returns the task that was just inserted 
+
+
+# What should delete do?
+    # Get the task number and then just delete that task from the task array
+    # Problem because right now we are just using the len of the array to get the id for the task, if we have 3 elements
+    # and then we delete we now have 2, but now the ids are not really matching and have weird orders, the second ele
+    # would have an id of 3 and the newest elemetn woudl ahve 3 as well, so we have to make unique ID to not make this confusing
