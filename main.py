@@ -6,6 +6,8 @@ from http import HTTPStatus
 # Custom handler to process requests
 class myHandler(HS.SimpleHTTPRequestHandler):
     tasks = []
+    unique_ID_map = set()
+    next_id = 1
 
     def do_POST(self):
         if self.path == "/tasks":
@@ -23,9 +25,18 @@ class myHandler(HS.SimpleHTTPRequestHandler):
                 self.send_error(HTTPStatus.BAD_REQUEST, "Missing 'title' field")
                 return 
 
-            # Create a new task
+            # Find the next free ID starting from +1 from the last ID that worked
+            # Checking in a set here is a lot faster than an array of number
+            while self.next_id in self.unique_ID_map:
+                self.next_id += 1
+
+            # Once we have a free ID use it and then update next_id pointer that helps with keeping track of what ID might be free
+            id = self.next_id
+            self.unique_ID_map.add(id)
+            self.next_id += 1
+            
             new_task = {
-                'id': len(self.tasks) + 1,
+                'id': id,
                 'title': decoded_data['title'],
                 'description': decoded_data.get ('description', ''),
                 'status': 'Not Started'
@@ -129,7 +140,6 @@ class myHandler(HS.SimpleHTTPRequestHandler):
         
     def do_DELETE(self):
         if (self.path.startswith('/tasks/')):
-            
             # Get the id that the user wants to change
             try: 
                 task_id = int(self.path.split('/')[-1])
@@ -137,6 +147,27 @@ class myHandler(HS.SimpleHTTPRequestHandler):
                 self.send_error(HTTPStatus.BAD_REQUEST, "Invalid task ID")
                 return
             
+            found_task = None
+            for task in self.tasks:
+                if task['id'] == task_id:
+                    found_task = task
+            
+            if found_task:
+                self.tasks.remove(found_task)
+                self.send_response(HTTPStatus.OK)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write("Task deleted".encode())
+            else:
+                self.send_error(HTTPStatus.NOT_FOUND, "Task not found")
+
+            # Remove from ID from set
+            # If the ID that was removed is less than the pointer, update the pointer to show that we have a free ID in the back
+            # Or if the task_id is the last ID we just use that ID again because we just deleted it and know that it must be free
+            self.unique_ID_map.remove(task_id)
+            self.next_id = min(self.next_id, task_id)
+
+    
 
 PORT = 8000
 handler = myHandler
@@ -150,10 +181,3 @@ with socketserver.TCPServer(("127.0.0.1", PORT), handler) as httpd:
 # The get gets all of the tasks so just the task array, if there is an id then get the task with that specific id
 # POST sends a task to the "server" in a JSON? format, the server than reads all of it, and then makes a new task object, that then 
 # gets inserted into the tasks array, and then returns the task that was just inserted 
-
-
-# What should delete do?
-    # Get the task number and then just delete that task from the task array
-    # Problem because right now we are just using the len of the array to get the id for the task, if we have 3 elements
-    # and then we delete we now have 2, but now the ids are not really matching and have weird orders, the second ele
-    # would have an id of 3 and the newest elemetn woudl ahve 3 as well, so we have to make unique ID to not make this confusing
