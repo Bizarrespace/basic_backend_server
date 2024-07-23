@@ -60,41 +60,35 @@ class myHandler(HS.SimpleHTTPRequestHandler):
         # If request is just tasks then get all the tasks, if followed by # then
         # get specific
         if self.path == "/tasks":
-            self.get_all_tasks()
-        elif self.path.startswith('/tasks/'):
-            self.get_specific_task()
-        else:
-            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
-
-        
-    def get_all_tasks(self):
-        response = json.dumps(self.tasks)
-
-        self.send_response(HTTPStatus.OK)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(response.encode())
-
-    def get_specific_task(self):
-        # self.path is just /tasks/#, so we want to split to using / to 
-        # get our task #
-        task_id = int(self.path.split('/')[-1])
-
-    
-        found_task = None
-        for task in self.tasks:
-            if task['id'] == task_id:
-                found_task = task
-        
-        if found_task:
-            response = json.dumps(found_task)
+            response = json.dumps(self.tasks)
 
             self.send_response(HTTPStatus.OK)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(response.encode())
+
+        elif self.path.startswith('/tasks/'):
+            # self.path is just /tasks/#, so we want to split to using / to 
+            # get our task #
+            task_id = int(self.path.split('/')[-1])
+
+            found_task = None
+            for task in self.tasks:
+                if task['id'] == task_id:
+                    found_task = task
+            
+            if found_task:
+                response = json.dumps(found_task)
+
+                self.send_response(HTTPStatus.OK)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(response.encode())
+            else:
+                self.send_error(HTTPStatus.NOT_FOUND, "Task not found")
+
         else:
-            self.send_error(HTTPStatus.NOT_FOUND, "Task not found")
+            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
     def do_PUT(self):
         if (self.path.startswith('/tasks/')):
@@ -166,8 +160,6 @@ class myHandler(HS.SimpleHTTPRequestHandler):
             # Or if the task_id is the last ID we just use that ID again because we just deleted it and know that it must be free
             self.unique_ID_map.remove(task_id)
             self.next_id = min(self.next_id, task_id)
-
-    
 
 PORT = 8000
 handler = myHandler
