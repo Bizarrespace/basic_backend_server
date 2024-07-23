@@ -2,6 +2,13 @@ import http.server as HS
 import socketserver
 import json
 from http import HTTPStatus
+import logging as log
+
+# Set up logger
+log.basicConfig(
+    level=log.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # Custom handler to process requests
 class myHandler(HS.SimpleHTTPRequestHandler):
@@ -23,6 +30,7 @@ class myHandler(HS.SimpleHTTPRequestHandler):
             # Validate title, making sure that the field is there
             if 'title' not in decoded_data:
                 self.send_error(HTTPStatus.BAD_REQUEST, "Missing 'title' field")
+                log.error("User did not pass in title")
                 return 
 
             # Find the next free ID starting from +1 from the last ID that worked
@@ -44,6 +52,7 @@ class myHandler(HS.SimpleHTTPRequestHandler):
 
             # add new task into storage area
             self.tasks.append(new_task)
+            log.info(f"Created new task with ID: {id}")
 
             # Prepare the response
             response = json.dumps(new_task)
@@ -55,6 +64,7 @@ class myHandler(HS.SimpleHTTPRequestHandler):
             self.wfile.write(response.encode())
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+            log.error("Invalid post url path")
 
     def do_GET(self):
         # If request is just tasks then get all the tasks, if followed by # then
@@ -79,16 +89,18 @@ class myHandler(HS.SimpleHTTPRequestHandler):
             
             if found_task:
                 response = json.dumps(found_task)
-
                 self.send_response(HTTPStatus.OK)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(response.encode())
+                log.info(f"Got task with ID: {task_id}")
             else:
                 self.send_error(HTTPStatus.NOT_FOUND, "Task not found")
+                log.error("Task not found")
 
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+            log.error("Invalid get url path")
 
     def do_PUT(self):
         if (self.path.startswith('/tasks/')):
@@ -97,12 +109,14 @@ class myHandler(HS.SimpleHTTPRequestHandler):
             try: 
                 task_id = int(self.path.split('/')[-1])
             except ValueError:
-                self.send_error(HTTPStatus.BAD_REQUEST, "Invalid task ID")
+                self.send_error(HTTPStatus.BAD_REQUEST, "Could not parse ID")
+                log.error("Could not parse ID")
                 return
             
             # Check if task_id is valid
             if task_id <= 0 or task_id > len(self.tasks):
                 self.send_error(HTTPStatus.NOT_FOUND, "Invalid task ID")
+                log.error("Invalid task ID")
                 return
 
             # Decode the data
@@ -122,6 +136,7 @@ class myHandler(HS.SimpleHTTPRequestHandler):
 
             # Replace the task at the index with the new one from the user
             self.tasks[task_index] = new_task
+            log.info(f"Updated task with ID: {task_id}")
 
             response = json.dumps(self.tasks[task_index])
             self.send_response(HTTPStatus.OK)
@@ -130,6 +145,7 @@ class myHandler(HS.SimpleHTTPRequestHandler):
             self.wfile.write(response.encode())
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+            log.error("Put request not found")
             return 
         
     def do_DELETE(self):
@@ -139,6 +155,7 @@ class myHandler(HS.SimpleHTTPRequestHandler):
                 task_id = int(self.path.split('/')[-1])
             except ValueError:
                 self.send_error(HTTPStatus.BAD_REQUEST, "Invalid task ID")
+                log.error("Could not parse task ID")
                 return
             
             found_task = None
@@ -152,8 +169,10 @@ class myHandler(HS.SimpleHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write("Task deleted".encode())
+                log.info(f"Deleted task with ID: {task_id}")
             else:
                 self.send_error(HTTPStatus.NOT_FOUND, "Task not found")
+                log.error("Could not find task")
 
             # Remove from ID from set
             # If the ID that was removed is less than the pointer, update the pointer to show that we have a free ID in the back
@@ -169,7 +188,6 @@ with socketserver.TCPServer(("127.0.0.1", PORT), handler) as httpd:
    httpd.serve_forever() 
 
 
-# We are making a backend-api that simply has as tasks array, that shows the task name, description, and if its completed or not
-# The get gets all of the tasks so just the task array, if there is an id then get the task with that specific id
-# POST sends a task to the "server" in a JSON? format, the server than reads all of it, and then makes a new task object, that then 
-# gets inserted into the tasks array, and then returns the task that was just inserted 
+# Need to clean up double messages, only want the logging messages
+# Need to work on persistant storage next, use postgres to learn more about DB intergration
+
